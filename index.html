@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Especialista: Pessoa</title>
+    <script src="https://cdn.jsdelivr.net/npm/tau-prolog@0.3.2/modules/core.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; padding: 20px; }
+        .file-upload { margin-bottom: 20px; padding: 20px; border: 2px dashed #ccc; text-align: center; background: #fafafa; }
+        input[type="file"] { font-size: 16px; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #333; color: white; border: none;}
+        #resultado { margin-top: 20px; padding: 15px; background: #f4f4f4; border-left: 4px solid #333; line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+    <h2>Inferência de Autoria (Ontologia Semântica)</h2>
+    <p>Selecione um arquivo .txt. O sistema extrairá conceitos abstratos e aplicará regras de exclusão mútua para deduzir o autor.</p>
+    
+    <div class="file-upload">
+        <input type="file" id="arquivo-entrada" accept=".txt">
+    </div>
+    
+    <button onclick="lerEAnalisarArquivo()">Processar Dedução Lógica</button>
+
+    <div id="resultado" style="display:none;"></div>
+
+    <script>
+        const session = pl.create();
+
+        const programaProlog = `
+            membro(X, [X|_]).
+            membro(X, [_|Cauda]) :- membro(X, Cauda).
+
+            palavra_conceito(natureza, natureza). palavra_conceito(rebanho, natureza). palavra_conceito(sol, natureza). palavra_conceito(pedra, natureza). palavra_conceito(flor, natureza).
+            palavra_conceito(alma, metafisica). palavra_conceito(misterio, metafisica). palavra_conceito(pensar, metafisica). palavra_conceito(filosofia, metafisica).
+            palavra_conceito(deuses, mitologia). palavra_conceito(fado, mitologia). palavra_conceito(olimpo, mitologia). palavra_conceito(apolo, mitologia).
+            palavra_conceito(maquina, modernidade). palavra_conceito(eletricidade, modernidade). palavra_conceito(furia, modernidade). palavra_conceito(motor, modernidade).
+            palavra_conceito(tedio, melancolia). palavra_conceito(lisboa, melancolia). palavra_conceito(escritorio, melancolia). palavra_conceito(cansaco, melancolia).
+
+            extrair_conceitos([], []).
+            extrair_conceitos([P|R], [C|CR]) :- palavra_conceito(P, C), extrair_conceitos(R, CR).
+            extrair_conceitos([P|R], CR) :- \\+ palavra_conceito(P, _), extrair_conceitos(R, CR).
+
+            autor(caeiro, Conceitos) :- membro(natureza, Conceitos), \\+ membro(metafisica, Conceitos), \\+ membro(modernidade, Conceitos).
+            autor(reis, Conceitos) :- membro(mitologia, Conceitos), \\+ membro(modernidade, Conceitos).
+            autor(campos, Conceitos) :- membro(modernidade, Conceitos).
+            autor(soares, Conceitos) :- membro(melancolia, Conceitos), \\+ membro(mitologia, Conceitos), \\+ membro(modernidade, Conceitos).
+
+            descobrir_autor(Palavras, Autor) :- extrair_conceitos(Palavras, Conceitos), autor(Autor, Conceitos).
+        `;
+        
+        session.consult(programaProlog);
+
+        function lerEAnalisarArquivo() {
+            const inputElement = document.getElementById("arquivo-entrada");
+            const divResultado = document.getElementById("resultado");
+
+            if (inputElement.files.length === 0) {
+                divResultado.style.display = "block";
+                divResultado.innerHTML = "Selecione um arquivo .txt.";
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(evento) {
+                processarTexto(evento.target.result, divResultado);
+            };
+            reader.readAsText(inputElement.files[0]);
+        }
+
+        function processarTexto(texto, divResultado) {
+            divResultado.style.display = "block";
+            divResultado.innerHTML = "Iniciando motor de inferência...";
+
+            texto = texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
+            let palavras = texto.split(/\s+/).filter(p => p.length > 0);
+
+            if (palavras.length === 0) return;
+
+            let listaProlog = "[" + palavras.join(",") + "]";
+            let query = `descobrir_autor(${listaProlog}, Autor).`;
+            
+            let autoresEncontrados = [];
+
+            session.query(query, {
+                success: function() {
+                    buscarRespostas(autoresEncontrados, divResultado);
+                },
+                error: function(err) {
+                    divResultado.innerHTML = "Erro de sintaxe ao processar as palavras no Prolog.";
+                }
+            });
+        }
+
+        function buscarRespostas(autoresEncontrados, divResultado) {
+            session.answer({
+                success: function(resposta) {
+                    let autor = resposta.lookup("Autor");
+                    if (autor) {
+                        let nomeOriginal = autor.id;
+                        if (!autoresEncontrados.includes(nomeOriginal)) {
+                            autoresEncontrados.push(nomeOriginal);
+                        }
+                    }
+                    // Chama recursivamente para ver se as regras permitem outro autor (backtracking)
+                    buscarRespostas(autoresEncontrados, divResultado);
+                },
+                fail: function() {
+                    exibirResultadoFinal(autoresEncontrados, divResultado);
+                },
+                error: function(err) {
+                    exibirResultadoFinal(autoresEncontrados, divResultado);
+                },
+                limit: function() {
+                    exibirResultadoFinal(autoresEncontrados, divResultado);
+                }
+            });
+        }
+
+        function exibirResultadoFinal(autoresEncontrados, divResultado) {
+            let formatarNome = {
+                "caeiro": "Alberto Caeiro",
+                "reis": "Ricardo Reis",
+                "campos": "Álvaro de Campos",
+                "soares": "Bernardo Soares"
+            };
+
+            if (autoresEncontrados.length === 0) {
+                divResultado.innerHTML = `<strong>Resultado:</strong><br>O motor lógico não encontrou nenhum autor que satisfaça estritamente as restrições do texto lido. As regras colidiram ou faltaram conceitos-chave.`;
+            } else {
+                let nomes = autoresEncontrados.map(a => formatarNome[a] || a).join(" e/ou ");
+                divResultado.innerHTML = `<strong>Dedução Lógica Concluída:</strong><br><br>As regras de intersecção e exclusão apontam para:<br><strong>${nomes}</strong>`;
+            }
+        }
+    </script>
+</body>
+</html>
