@@ -33,17 +33,27 @@
             membro(X, [X|_]).
             membro(X, [_|Cauda]) :- membro(X, Cauda).
 
-            palavra_conceito(natureza, natureza). palavra_conceito(rebanho, natureza). palavra_conceito(sol, natureza). palavra_conceito(pedra, natureza). palavra_conceito(flor, natureza).
-            palavra_conceito(alma, metafisica). palavra_conceito(misterio, metafisica). palavra_conceito(pensar, metafisica). palavra_conceito(filosofia, metafisica).
+            % Dicionário expandido com plurais e verbos base
+            palavra_conceito(natureza, natureza). palavra_conceito(rebanho, natureza). palavra_conceito(rebanhos, natureza). 
+            palavra_conceito(sol, natureza). palavra_conceito(pedra, natureza). palavra_conceito(flor, natureza).
+            palavra_conceito(pastor, natureza). palavra_conceito(olhos, natureza). palavra_conceito(sentidos, natureza).
+
+            palavra_conceito(alma, metafisica). palavra_conceito(misterio, metafisica). palavra_conceito(pensar, metafisica). palavra_conceito(penso, metafisica). palavra_conceito(filosofia, metafisica).
+            
             palavra_conceito(deuses, mitologia). palavra_conceito(fado, mitologia). palavra_conceito(olimpo, mitologia). palavra_conceito(apolo, mitologia).
+            
             palavra_conceito(maquina, modernidade). palavra_conceito(eletricidade, modernidade). palavra_conceito(furia, modernidade). palavra_conceito(motor, modernidade).
+            
             palavra_conceito(tedio, melancolia). palavra_conceito(lisboa, melancolia). palavra_conceito(escritorio, melancolia). palavra_conceito(cansaco, melancolia).
 
             extrair_conceitos([], []).
             extrair_conceitos([P|R], [C|CR]) :- palavra_conceito(P, C), extrair_conceitos(R, CR).
             extrair_conceitos([P|R], CR) :- \\+ palavra_conceito(P, _), extrair_conceitos(R, CR).
 
-            autor(caeiro, Conceitos) :- membro(natureza, Conceitos), \\+ membro(metafisica, Conceitos), \\+ membro(modernidade, Conceitos).
+            % Nova Regra: Caeiro agora tolera vocabulário metafísico (pois ele o usa para criticar), 
+            % mas continua proibido de usar mitologia ou máquinas modernas.
+            autor(caeiro, Conceitos) :- membro(natureza, Conceitos), \\+ membro(mitologia, Conceitos), \\+ membro(modernidade, Conceitos).
+            
             autor(reis, Conceitos) :- membro(mitologia, Conceitos), \\+ membro(modernidade, Conceitos).
             autor(campos, Conceitos) :- membro(modernidade, Conceitos).
             autor(soares, Conceitos) :- membro(melancolia, Conceitos), \\+ membro(mitologia, Conceitos), \\+ membro(modernidade, Conceitos).
@@ -70,14 +80,22 @@
             reader.readAsText(inputElement.files[0]);
         }
 
-        function processarTexto(texto, divResultado) {
+ function processarTexto(texto, divResultado) {
             divResultado.style.display = "block";
             divResultado.innerHTML = "Iniciando motor de inferência...";
 
-            texto = texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
+            //Deixa tudo minúsculo e remove os acentos
+            texto = texto.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+            
+            
+            texto = texto.replace(/[^a-z\s]/g, "");
+            
             let palavras = texto.split(/\s+/).filter(p => p.length > 0);
 
-            if (palavras.length === 0) return;
+            if (palavras.length === 0) {
+                divResultado.innerHTML = "Erro: O arquivo não contém palavras válidas após a limpeza.";
+                return;
+            }
 
             let listaProlog = "[" + palavras.join(",") + "]";
             let query = `descobrir_autor(${listaProlog}, Autor).`;
@@ -89,6 +107,8 @@
                     buscarRespostas(autoresEncontrados, divResultado);
                 },
                 error: function(err) {
+                    // Se o erro persistir, o Prolog vai avisar aqui
+                    console.error("Erro Prolog:", err);
                     divResultado.innerHTML = "Erro de sintaxe ao processar as palavras no Prolog.";
                 }
             });
